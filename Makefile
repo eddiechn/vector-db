@@ -107,6 +107,21 @@ load-test: build ## Run load testing
 		./examples/load_test.sh; \
 	fi
 
+concurrency-test: build 
+	@echo "⚡ Starting load test..."
+	@if ! pgrep -f "$(BINARY_NAME)" > /dev/null; then \
+		echo "Starting VectorDB server..."; \
+		$(BUILD_DIR)/$(BINARY_NAME) & \
+		sleep 3; \
+		echo "Running concurrency test..."; \
+		./examples/concurrency_test.sh; \
+		echo "Stopping server..."; \
+		pkill -f "$(BINARY_NAME)"; \
+	else \
+		echo "VectorDB server is already running"; \
+		./examples/concurrency_test.sh; \
+	fi
+
 python-demo: ## Run Python client demo (requires requests, numpy)
 	@echo "🐍 Running Python client demo..."
 	@if ! command -v python3 >/dev/null 2>&1; then \
