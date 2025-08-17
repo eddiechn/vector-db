@@ -14,19 +14,27 @@ import (
 
 // Server represents the HTTP API server
 type Server struct {
-	db     *internal.VectorDatabase
-	mux    *http.ServeMux
-	port   int
-	logger *log.Logger
+	db       *internal.VectorDatabase
+	mux      *http.ServeMux
+	port     int
+	logger   *log.Logger
+	embedder *internal.OpenAIEmbedder
 }
 
 // NewServer creates a new API server
 func NewServer(db *internal.VectorDatabase, port int, logger *log.Logger) *Server {
+	embedder, err := internal.NewOpenAIEmbedder()
+	if err != nil {
+		logger.Printf("Warning: OpenAI embedder initialization failed: %v", err)
+		logger.Printf("String-based embedding routes will not be available")
+	}
+
 	server := &Server{
-		db:     db,
-		mux:    http.NewServeMux(),
-		port:   port,
-		logger: logger,
+		db:       db,
+		mux:      http.NewServeMux(),
+		port:     port,
+		logger:   logger,
+		embedder: embedder,
 	}
 
 	server.setupRoutes()
@@ -42,6 +50,10 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/vectors", s.handleVectors)
 	s.mux.HandleFunc("/vectors/", s.handleVectorByID)
 	s.mux.HandleFunc("/search", s.handleSearch)
+
+	// String-based embedding operations
+	s.mux.HandleFunc("/embed", s.handleEmbed)
+	s.mux.HandleFunc("/search/text", s.handleTextSearch)
 
 	// Database operations
 	s.mux.HandleFunc("/stats", s.handleStats)
@@ -654,4 +666,130 @@ func (s *Server) writeError(w http.ResponseWriter, message string, status int) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleEmbed converts text to vector embedding and stores it
+func (s *Server) handleEmbed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		s.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.embedder == nil {
+		s.writeError(w, "OpenAI embedder not available. Please set OPENAI_API_KEY environment variable", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req internal.EmbedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		s.writeError(w, "ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Text == "" {
+		s.writeError(w, "Text is required", http.StatusBadRequest)
+		return
+	}
+
+	// Generate embedding from text
+	embedding, err := s.embedder.EmbedText(req.Text)
+	if err != nil {
+		s.writeError(w, fmt.Sprintf("Failed to generate embedding: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Create vector and insert into database
+	vector := internal.Vector{
+		ID:   req.ID,
+		Data: embedding,
+	}
+
+	insertReq := internal.InsertRequest{
+		Vector:   vector,
+		Metadata: req.Metadata,
+	}
+
+	if err := s.db.Insert(insertReq); err != nil {
+		status := http.StatusInternalServerError
+		if _, ok := err.(*internal.DimensionMismatchError); ok {
+			status = http.StatusBadRequest
+		}
+		s.writeError(w, fmt.Sprintf("Failed to insert vector: %v", err), status)
+		return
+	}
+
+	response := map[string]interface{}{
+		"message":    "Text embedded and stored successfully",
+		"id":         req.ID,
+		"text":       req.Text,
+		"dimensions": len(embedding),
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	s.writeJSON(w, response)
+}
+
+// handleTextSearch performs similarity search using text input
+func (s *Server) handleTextSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		s.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.embedder == nil {
+		s.writeError(w, "OpenAI embedder not available. Please set OPENAI_API_KEY environment variable", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req internal.TextSearchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if req.Text == "" {
+		s.writeError(w, "Text is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.K <= 0 {
+		req.K = 10 // Default
+	}
+
+	// Generate embedding from search text
+	embedding, err := s.embedder.EmbedText(req.Text)
+	if err != nil {
+		s.writeError(w, fmt.Sprintf("Failed to generate embedding for search: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Perform search with generated embedding
+	searchReq := internal.SearchRequest{
+		Vector: embedding,
+		K:      req.K,
+	}
+
+	results, err := s.db.Search(searchReq)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if _, ok := err.(*internal.DimensionMismatchError); ok {
+			status = http.StatusBadRequest
+		}
+		s.writeError(w, fmt.Sprintf("Search failed: %v", err), status)
+		return
+	}
+
+	response := map[string]interface{}{
+		"results":    results,
+		"query_text": req.Text,
+		"k":          req.K,
+		"count":      len(results),
+	}
+
+	s.writeJSON(w, response)
 }

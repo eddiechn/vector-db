@@ -10,6 +10,7 @@ A custom-built, high-performance vector database implemented in Go, showcasing a
 - **Multiple distance metrics**: Cosine similarity, Euclidean distance, Dot product, Manhattan distance
 - **Top-K similarity search** with configurable result limits
 - **Automatic data persistence** with graceful shutdown handling
+- **🆕 OpenAI Integration**: Text-to-vector embedding and text-based search using OpenAI's API
 
 ### Advanced Indexing
 - **HNSW (Hierarchical Navigable Small World)** algorithm implementation
@@ -19,6 +20,7 @@ A custom-built, high-performance vector database implemented in Go, showcasing a
 
 ### Production-Ready Features
 - **RESTful HTTP API** with comprehensive endpoints
+- **String-based embedding API** for seamless text processing
 - **Real-time statistics dashboard** with interactive web interface
 - **CORS middleware** and request logging
 - **Health checks** and monitoring endpoints
@@ -150,6 +152,10 @@ Access the interactive dashboard at `http://localhost:8080/` to:
 
 ### Search Operations
 - `POST /search` - Perform similarity search
+- `POST /search/text` - 🆕 Search using text input (requires OpenAI API key)
+
+### String-Based Embedding Operations  
+- `POST /embed` - 🆕 Convert text to vector embedding and store (requires OpenAI API key)
 
 ### Database Operations
 - `GET /stats` - Database statistics
@@ -159,6 +165,8 @@ Access the interactive dashboard at `http://localhost:8080/` to:
 ### Administrative
 - `POST /admin/save` - Manual save
 - `GET /admin/index-stats` - Detailed index statistics
+
+> **Note**: The new text-based endpoints require setting the `OPENAI_API_KEY` environment variable. See [OPENAI_API.md](OPENAI_API.md) for detailed documentation.
 
 ## 🧪 Testing
 

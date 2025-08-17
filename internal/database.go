@@ -39,7 +39,7 @@ type DatabaseConfig struct {
 // DefaultDatabaseConfig returns a default database configuration
 func DefaultDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
-		Dimensions:     32,
+		Dimensions:     1536, // OpenAI text-embedding-ada-002 dimensions
 		DistanceMetric: CosineSimilarity,
 		IndexConfig: IndexConfig{
 			Type:       "hnsw",

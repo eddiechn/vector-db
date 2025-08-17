@@ -217,3 +217,16 @@ func (s *StatsTracker) GetStats() DatabaseStats {
 	defer s.mu.RUnlock()
 	return s.stats
 }
+
+// EmbedRequest represents a request to embed text and store as vector
+type EmbedRequest struct {
+	ID       string                 `json:"id"`
+	Text     string                 `json:"text"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// TextSearchRequest represents a request to search using text input
+type TextSearchRequest struct {
+	Text string `json:"text"`
+	K    int    `json:"k,omitempty"`
+}
