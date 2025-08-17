@@ -50,7 +50,7 @@ go build -o vectordb ./cmd
 ./vectordb
 
 # Custom configuration
-./vectordb -port 8080 -dimensions 21536 -data ./my_vectors
+./vectordb -port 8080 -dimensions 1536 -data ./my_vectors
 
 # View all options
 ./vectordb -help
